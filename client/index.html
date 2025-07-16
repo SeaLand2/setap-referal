@@ -1,0 +1,27 @@
+<!doctype html>
+<script src="/index.js" type="module"></script>
+<link rel="stylesheet" href="/style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>PJC Race App</title>
+
+<header>
+    <h1>PJC Race App</h1>
+    <nav>
+    </nav>
+</header>
+
+<main>
+
+</main>
+
+<template id="temp-screen">
+    <section class="screen hidden">
+        <h2 class="title">Title</h2>
+    </section>
+</template>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', {scope: '/'})
+    }
+</script>
