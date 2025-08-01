@@ -5,7 +5,7 @@
 1. Make sure [node.js](https://nodejs.org/en) is installed on the machine that the server will be run on.
 2. Navigate to the directory that this project is saved to 
 3. Run `npm install` in a terminal to install dependancies
-4. Run `npm start'
+4. Run `npm start`
 5. On a web browser go to the IP address + port shown in the terminal. For example `http://192.168.0.1:8080` or `http://localhost:8080/`
 
 # Documentation
