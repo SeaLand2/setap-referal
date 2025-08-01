@@ -1,13 +1,28 @@
 const pages = [
   {
     screen: 'home',
-    title: 'Home',
+    title: 'Login',
+  },
+  {
+    screen: 'create-account',
+    title: 'Sign Up',
+  },
+  {
+    screen: 'budget-setup',
+    title: 'Budget Setup',
+  },
+  {
+    screen: 'transactions',
+    title: 'Transactions',
+  },
+  {
+    screen: 'error',
+    title: 'Error',
   }
 ];
 
 const ui = {};
 const templates = {};
-
 
 /// UI functions ///
 
@@ -24,6 +39,7 @@ function getHandles() {
   ui.getButtons = () => Object.values(ui.buttons);
   // create objects for each template element
   templates.screen = document.querySelector('#temp-screen');
+  templates.budgetCategory = document.querySelector('#temp-budget-category');
 }
 
 
@@ -122,7 +138,7 @@ function showScreen(screen) {
   }
   showElement(ui.screens[screen]);
   ui.current = screen;
-  document.title = `PJC | ${ui.screens[screen].querySelector('.title').textContent}`;
+  document.title = `Budget | ${ui.screens[screen].querySelector('.title').textContent}`;
   if (screen !== 'error') {
     ui.buttons[screen].disabled = 'disabled';
   }
@@ -147,22 +163,396 @@ function readPath() {
 
 /// Screen functions ///
 
-//
+async function buildHomeLogin() {
+  const form = document.querySelector('#login-form');
+  form.querySelector('#login-submit').addEventListener('click', async (event) => {
+    event.preventDefault();
+    const email = form.email.value;
+    try {
+      const response = await fetch(`/api/users/${email}`);
+      if (response.ok) {
+        const userId = await response.json();
+        console.log('User logged in:', userId);
+        localStorage.setItem('userID', userId);
+        try {
+          const budgetId = await getUserBudgetId();
+          if (budgetId) {
+            localStorage.setItem('budgetId', budgetId);
+            console.log('Budget ID:', budgetId);
+          } else {
+            console.log('No budget found for user');
+            showScreen('budget-setup');
+            storeState();
+            location.reload();
+            return;
+          }
+        } catch (error) {
+          console.error('Error retrieving budget ID:', error);
+        }
+        showScreen('home'); //change to transaction home
+        storeState();
+        location.reload();
+      } else {
+        const errorElement = form.querySelector('.error');
+        errorElement.classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('Error during login:', error);
+      showScreen('error');
+    }
+  });
+}
 
 
-/// API functions ///
+async function getUserBudgetId() {
+  const userId = localStorage.getItem('userId');
+  if (!userId) return null;
 
-async function getThing() {
-  const response = await fetch('/api/thing');
+  const response = await fetch(`/api/budget/${userId}`);
   if (response.ok) {
-    return await response.json();
+    const budget = await response.json();
+    return budget.id;
+  }
+  return null;
+}
+
+
+async function buildCreateAccount() {
+  const form = document.querySelector('#signup-form');
+  form.querySelector('#signup-submit').addEventListener('click', async (event) => {
+    console.log('Creating account...');
+    event.preventDefault();
+    const email = form.querySelector('#new-email').value;
+    const password = form.querySelector('#new-password').value;
+    if (password !== form.querySelector('#confirm-password').value) {
+      const errorElement = form.querySelector('.error');
+      errorElement.textContent = 'Passwords do not match';
+      errorElement.classList.remove('hidden');
+      return;
+    }
+    try {
+      const payload = { email, password };
+      const response = await fetch(`/api/users/create`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) {
+        const userId = (await response.json()).userId;
+        console.log('User created:', userId);
+        localStorage.setItem('userId', userId);
+        showScreen('budget-setup');
+        storeState();
+        location.reload();
+      } else {
+        const errorElement = form.querySelector('.error');
+        errorElement.classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('Error during account creation:', error);
+      showScreen('error');
+    }
+  });
+}
+
+
+async function buildBudgetSetup() {
+  const form = document.querySelector('#budget-setup-form');
+  try {
+    const budgetAmount = localStorage.getItem('budgetAmount');
+    if (budgetAmount) {
+      form.querySelector('#budget-amount').value = budgetAmount;
+    }
+  } catch (error) {
+    console.error('Error building budget setup:', error);
+  }
+
+  form.querySelector('#budget-setup-submit').addEventListener('click', async (event) => {
+    console.log('Setting up budget...');
+    event.preventDefault();
+    const userId = localStorage.getItem('userId');
+    const budget = form.querySelector('#budget-amount').value;
+    try {
+      const payload = { userId, budget };
+      const response = await fetch(`/api/budget/create`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) {
+        const budgetId = (await response.json()).budgetId;
+        localStorage.setItem('budgetId', budgetId);
+        localStorage.setItem('budgetAmount', budget);
+        console.log('Budget created:', budgetId);
+        await createDefaultCategories(budgetId);
+        storeState();
+        location.reload();
+      } else {
+        const errorElement = form.querySelector('.error');
+        errorElement.classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('Error during budget setup:', error);
+      showScreen('error');
+    }
+  });
+}
+
+
+async function createDefaultCategories(budgetId) {
+  const categories = [
+    { name: 'Rent', budgetedAmount: 0 },
+    { name: 'Food', budgetedAmount: 0 },
+    { name: 'Utilities', budgetedAmount: 0 },
+    { name: 'Other', budgetedAmount: 0 },
+  ];
+
+  for (const category of categories) {
+    await createBudgetCategory(budgetId, category);
+  }
+}
+
+async function buildBudgetCategories() {
+  const budgetId = localStorage.getItem('budgetId');
+  if (!budgetId) return;
+
+  const categories = await getBudgetCategories(budgetId);
+  const categoryList = ui.screens['budget-setup'].querySelector('#budget-category-select');
+  const categoryIdDict = {};
+  if (categories.length === 0) {
+    categoryList.innerHTML = '<p>No categories found. Please add some.</p>';
+    return;
   } else {
-    return false;
+    for (let i = 0; i < categories.length; i++) {
+      categoryIdDict[categories[i].category_id] = i;
+      const row = templates.budgetCategory.content.cloneNode(true).firstElementChild;
+      row.value = categories[i].category_id;
+      row.querySelector('.category-name').value = categories[i].name;
+      row.querySelector('.category-amount').value = categories[i].budgeted_amount;
+      row.classList.remove('hidden');
+      categoryList.appendChild(row);
+    }
+  }
+
+  ui.screens['budget-setup'].querySelector('#edit-category').addEventListener('click', () => {
+    const categoryId = categoryList.value;
+    const category = categories[categoryIdDict[categoryId]];
+    console.log(category.name);
+    console.log(category.budgeted_amount);
+    try {
+      const popup = ui.screens['budget-setup'].querySelector('#edit-category-popup');
+      popup.querySelector('.category-edit-name').value = category.name;
+      popup.querySelector('.category-edit-amount').value = category.budgeted_amount;
+      popup.classList.remove('hidden');
+    } catch (error) {
+      console.log(error);
+    }
+  })
+
+  ui.screens['budget-setup'].querySelector('#save-category').addEventListener('click', () => {
+    const categoryId = categoryList.value;
+    try {
+      editCategory(categoryId);
+    } catch (error) {
+      console.log(error);
+    }
+  })
+
+  ui.screens['budget-setup'].querySelector('#delete-category').addEventListener('click', () => {
+    const categoryId = categoryList.value;
+    try {
+      deleteCategory(categoryId);
+    } catch (error) {
+      console.log(error);
+    }
+  })
+}
+
+
+async function editCategory(categoryId) {
+  const newName = ui.screens['budget-setup'].querySelector('.category-edit-name').value;
+  const newBudgetedAmount = ui.screens['budget-setup'].querySelector('.category-edit-amount').value;
+
+  try {
+    const payload = { categoryId, newName, newBudgetedAmount };
+    const response = await fetch(`/api/categories/update`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (response.ok) {
+      console.log('Category updated:', await response.json());
+      location.reload();
+    } else {
+      console.error('Error updating category:', response.statusText);
+      location.reload();
+    }
+  } catch (error) {
+    console.error('Error during category update:', error);
+    location.reload();
   }
 }
 
 
-/// Utulity functions ///
+async function deleteCategory(categoryId) {
+  try {
+    const payload = { categoryId };
+    const response = await fetch(`/api/categories/delete`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (response.ok) {
+      console.log('Category deleted:', await response.json());
+      storeState();
+      location.reload();
+    } else {
+      console.error('Error deleting category:', response.statusText);
+      location.reload();
+    }
+  } catch (error) {
+    console.error('Error during category deletion:', error);
+  }
+}
+
+
+async function createBudgetCategory(budgetId, category) {
+  const payload = {
+    budgetId,
+    name: category.name,
+    budgetedAmount: category.budgetedAmount,
+  };
+  const response = await fetch(`/api/categories/create`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (response.ok) {
+    console.log('Category created:', await response.json());
+  } else {
+    console.error('Error creating category:', response.statusText);
+  }
+}
+
+
+async function getBudgetCategories(budgetId) {
+  const response = await fetch(`/api/categories/${budgetId}`);
+  if (response.ok) {
+    return await response.json();
+  } else {
+    console.error('Error fetching budget categories:', response.statusText);
+    return [];
+  }
+}
+
+
+async function buildTransactions() {
+  const transactionForm = ui.screens['transactions'].querySelector('#transaction-form');
+  const transactionList = ui.screens['transactions'].querySelector('#transaction-select');
+  const budgetId = localStorage.getItem('budgetId');
+  if (!budgetId) return;
+  const transactions = await getTransactionsByBudgetId(budgetId);
+  const categories = await getBudgetCategories(budgetId);
+
+  const categorySelect = transactionForm.querySelector('#transaction-category');
+  for (const category of categories) {
+    const option = document.createElement('option');
+    option.value = category.category_id;
+    option.textContent = `${category.name} - $${category.budgeted_amount}`;
+    categorySelect.appendChild(option);
+  }
+
+  transactionForm.querySelector('#transaction-submit').addEventListener('click', async (event) => {
+    event.preventDefault();
+    const amount = transactionForm.querySelector('#transaction-amount').value;
+    const categoryId = transactionForm.querySelector('#transaction-category').value;
+    const date = transactionForm.querySelector('#transaction-date').value;
+    const description = transactionForm.querySelector('#transaction-description').value;
+    try {
+      const payload = { budgetId, amount, categoryId, date, description };
+      const response = await fetch(`/api/transactions/create`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) {
+        console.log('Transaction created:', await response.json());
+        storeState();
+        location.reload();
+      } else {
+        console.error('Error creating transaction:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error during transaction creation:', error);
+    }
+  });
+
+  if (transactions.length === 0) {
+    transactionList.innerHTML = '<p>No transactions found. Please add some.</p>';
+    return;
+  } else {
+    for (const transaction of transactions) {
+      const option = document.createElement('option');
+      option.value = transaction.transaction_id;
+      option.textContent = `${transaction.transaction_date} - ${transaction.description} - $${transaction.amount}`;
+      transactionList.appendChild(option);
+    }
+  }
+
+  ui.screens['transactions'].querySelector('#delete-transaction').addEventListener('click', () => {
+    console.log('Deleting transaction...');
+    const transactionId = transactionList.value;
+    deleteTransaction(transactionId);
+  });
+}
+
+
+async function getTransactionsByBudgetId(budgetId) {
+  const response = await fetch(`/api/transactions/${budgetId}`);
+  if (response.ok) {
+    return await response.json();
+  } else {
+    console.error('Error fetching transactions:', response.statusText);
+    return [];
+  }
+}
+
+async function deleteTransaction(transactionId) {
+  try {
+    const payload = { transactionId };
+    const response = await fetch(`/api/transactions/delete`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (response.ok) {
+      console.log('Transaction deleted:', await response.json());
+      storeState();
+      location.reload();
+    } else {
+      console.error('Error deleting transaction:', response.statusText);
+      location.reload();
+    }
+  } catch (error) {
+    console.error('Error during transaction deletion:', error);
+  }
+}
+
+/// Utility functions ///
 function showElement(element) {
   element.classList.remove('hidden');
 }
@@ -184,11 +574,11 @@ async function main() {
   buildScreens();
   buildNav();
   await getContent();
-  buildHomeRaceSelector();
-  buildCheckpointRunner();
-  buildMarshalCodeEntry();
-  buildRunTimer();
-  try { buildRunnerList(); } catch (error) { console.log(error); }
+  buildHomeLogin()
+  buildCreateAccount();
+  buildBudgetSetup();
+  buildBudgetCategories();
+  buildTransactions();
   window.addEventListener('popstate', loadInitialScreen);
   loadInitialScreen();
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'PJC-cache-V1';
+const CACHE_NAME = 'budget-cache-V1';
 
 
 self.addEventListener('install', (event) => {
@@ -10,6 +10,10 @@ self.addEventListener('install', (event) => {
       'index.js',
       'style.css',
       './screens/home.inc',
+      './screens/create-account.inc',
+      './screens/budget-setup.inc',
+      './screens/transactions.inc',
+      './screens/error.inc',
     ]);
   })());
 });

@@ -2,10 +2,10 @@
 <script src="/index.js" type="module"></script>
 <link rel="stylesheet" href="/style.css">
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>PJC Race App</title>
+<title>Budgeting App</title>
 
 <header>
-    <h1>PJC Race App</h1>
+    <h1>Budgeting App</h1>
     <nav>
     </nav>
 </header>
@@ -19,6 +19,14 @@
         <h2 class="title">Title</h2>
     </section>
 </template>
+
+<template id="temp-budget-category">
+    <option class="budget-category hidden">
+        <input type="text" class="category-name" value="" required>
+        <input type="number" class="category-amount" value="" required>
+    </option>
+</template>
+    
 
 <script>
     if ('serviceWorker' in navigator) {

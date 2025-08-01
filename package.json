@@ -4,7 +4,6 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "jest",
     "start": "node svr.js"
   },
   "repository": {
@@ -12,17 +11,10 @@
     "url": "git+https://github.com/SeaLand2/setap-referal.git"
   },
   "author": "UP2209456",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/SeaLand2/setap-referal/issues"
-  },
-  "homepage": "https://github.com/SeaLand2/setap-referal#readme",
   "dependencies": {
     "express": "^5.1.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   },
-  "devDependencies": {
-    "jest": "^30.0.4"
-  }
+  "type": "module"
 }
